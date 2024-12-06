@@ -15,6 +15,8 @@ type (
 	}
 
 	Request struct {
+		Config Config
+
 		//BaseUrl string
 
 		// response body
