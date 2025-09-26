@@ -15,13 +15,13 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/rs/xid"
 
-	"github.com/SirWaithaka/gohttp/request"
+	"github.com/SirWaithaka/gohttp"
 )
 
 var schemeRE = regexp.MustCompile("^([^:]+)://")
 
-func DefaultHooks() request.Hooks {
-	var hooks request.Hooks
+func DefaultHooks() gohttp.Hooks {
+	var hooks gohttp.Hooks
 
 	hooks.Build.PushFrontHook(SetHTTPClient(nil))
 	hooks.Build.PushFrontHook(ResolveEndpoint)
@@ -36,16 +36,16 @@ func DefaultHooks() request.Hooks {
 }
 
 // SetBasicAuth modifies the http.Request headers and adds basic auth credentials
-func SetBasicAuth(username, password string) request.Hook {
-	return request.Hook{Name: "core.BasicAuth", Fn: func(r *request.Request) {
+func SetBasicAuth(username, password string) gohttp.Hook {
+	return gohttp.Hook{Name: "core.BasicAuth", Fn: func(r *gohttp.Request) {
 		r.Request.SetBasicAuth(username, password)
 	}}
 }
 
 // SetHTTPClient sets the http.Client to be used for requests.
 // Sets a default http.Client if none is provided with a timeout of 30 seconds.
-func SetHTTPClient(client *http.Client) request.Hook {
-	return request.Hook{Name: "core.SetHTTPClient", Fn: func(r *request.Request) {
+func SetHTTPClient(client *http.Client) gohttp.Hook {
+	return gohttp.Hook{Name: "core.SetHTTPClient", Fn: func(r *gohttp.Request) {
 		if client == nil {
 			client = &http.Client{Timeout: 30 * time.Second}
 		}
@@ -71,13 +71,13 @@ func AddScheme(endpoint string, disableSSL bool) string {
 	return endpoint
 }
 
-var ResolveEndpoint = request.Hook{Name: "core.ResolveEndpoint", Fn: func(r *request.Request) {
+var ResolveEndpoint = gohttp.Hook{Name: "core.ResolveEndpoint", Fn: func(r *gohttp.Request) {
 	r.Config.Endpoint = AddScheme(r.Config.Endpoint, r.Config.DisableSSL)
 }}
 
 // EncodeRequestBody converts the value in r.Params into an io reader and adds it
 // to the http.Request instance
-var EncodeRequestBody = request.Hook{Name: "core.EncodeRequestBody", Fn: func(r *request.Request) {
+var EncodeRequestBody = gohttp.Hook{Name: "core.EncodeRequestBody", Fn: func(r *gohttp.Request) {
 	if r.Params == nil {
 		return
 	}
@@ -95,13 +95,13 @@ var EncodeRequestBody = request.Hook{Name: "core.EncodeRequestBody", Fn: func(r 
 
 var reStatusCode = regexp.MustCompile(`^(\d{3})`)
 
-var SendHook = request.Hook{Name: "core.Send", Fn: func(r *request.Request) {
+var SendHook = gohttp.Hook{Name: "core.Send", Fn: func(r *gohttp.Request) {
 	sender := sendFollowRedirects
 	if r.Config.DisableFollowRedirects {
 		sender = sendWithoutFollowRedirects
 	}
 
-	if r.Request.Body == request.NoBody {
+	if r.Request.Body == gohttp.NoBody {
 		// Strip off the request body if the NoBody reader was used as a
 		// placeholder for a request body. This prevents the SDK from
 		// making requests with a request body when it would be invalid
@@ -124,11 +124,11 @@ var SendHook = request.Hook{Name: "core.Send", Fn: func(r *request.Request) {
 	}
 }}
 
-func sendFollowRedirects(r *request.Request) (*http.Response, error) {
+func sendFollowRedirects(r *gohttp.Request) (*http.Response, error) {
 	return r.Config.HTTPClient.Do(r.Request)
 }
 
-func sendWithoutFollowRedirects(r *request.Request) (*http.Response, error) {
+func sendWithoutFollowRedirects(r *gohttp.Request) (*http.Response, error) {
 	transport := r.Config.HTTPClient.Transport
 	if transport == nil {
 		transport = http.DefaultTransport
@@ -137,7 +137,7 @@ func sendWithoutFollowRedirects(r *request.Request) (*http.Response, error) {
 	return transport.RoundTrip(r.Request)
 }
 
-func handleSendError(r *request.Request, err error) {
+func handleSendError(r *gohttp.Request, err error) {
 	// Prevent leaking if an HTTPResponse was returned. Clean up
 	// the body.
 	if r.Response != nil {
@@ -213,7 +213,7 @@ type RetryHook struct {
 	timer *timer
 }
 
-func (r RetryHook) nextDelay(cfg request.RetryConfig) time.Duration {
+func (r RetryHook) nextDelay(cfg gohttp.RetryConfig) time.Duration {
 	// using the multiplier, calculate the next delay
 	next := float64(cfg.CurrentDelay) * cfg.Multiplier
 	// if the next calculated delay is greater than max delay, return max delay
@@ -223,8 +223,8 @@ func (r RetryHook) nextDelay(cfg request.RetryConfig) time.Duration {
 	return time.Duration(next)
 }
 
-func (r *RetryHook) Retry() request.Hook {
-	return request.Hook{Name: "core.Retry", Fn: func(req *request.Request) {
+func (r *RetryHook) Retry() gohttp.Hook {
+	return gohttp.Hook{Name: "core.Retry", Fn: func(req *gohttp.Request) {
 		// increment retry count
 		req.RetryConfig.RetryCount += 1
 
@@ -253,22 +253,22 @@ func (r *RetryHook) Retry() request.Hook {
 }
 
 // Close stops the timer. Call close as a complete hook to ensure the timer is stopped.
-func (r *RetryHook) Close() request.Hook {
-	return request.Hook{Name: "core.RetryClose", Fn: func(_ *request.Request) {
+func (r *RetryHook) Close() gohttp.Hook {
+	return gohttp.Hook{Name: "core.RetryClose", Fn: func(_ *gohttp.Request) {
 		r.timer.Stop()
 	}}
 }
 
 // LogHTTPRequest is a hook to log the HTTP request sent to a service. If log level
 // matches request.LogDebugWithHTTPBody, the request body will be included.
-var LogHTTPRequest = request.Hook{Name: "core.LogHTTPRequest", Fn: logRequest}
+var LogHTTPRequest = gohttp.Hook{Name: "core.LogHTTPRequest", Fn: logRequest}
 
-func logRequest(r *request.Request) {
-	if !r.Config.LogLevel.AtLeast(request.LogDebug) || r.Config.Logger == nil {
+func logRequest(r *gohttp.Request) {
+	if !r.Config.LogLevel.AtLeast(gohttp.LogDebug) || r.Config.Logger == nil {
 		return
 	}
 
-	logBody := r.Config.LogLevel.Equals(request.LogDebugWithHTTPBody)
+	logBody := r.Config.LogLevel.Equals(gohttp.LogDebugWithHTTPBody)
 	b, err := httputil.DumpRequest(r.Request, logBody)
 	if err != nil {
 		r.Config.Logger.Log(fmt.Sprintf("DEBUG: %s failed, error %v",
@@ -283,8 +283,8 @@ func logRequest(r *request.Request) {
 
 // SetRequestID will set a default request id to the request if no id generator
 // function is given
-func SetRequestID(fn ...func() string) request.Hook {
-	return request.Hook{Name: "core.SetRequestID", Fn: func(r *request.Request) {
+func SetRequestID(fn ...func() string) gohttp.Hook {
+	return gohttp.Hook{Name: "core.SetRequestID", Fn: func(r *gohttp.Request) {
 		if len(fn) == 0 {
 			r.Config.RequestID = xid.New().String()
 			return

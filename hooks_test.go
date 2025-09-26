@@ -1,17 +1,17 @@
-package request_test
+package gohttp_test
 
 import (
 	"testing"
 
-	"github.com/SirWaithaka/gohttp/request"
+	"github.com/SirWaithaka/gohttp"
 )
 
 func TestHookList_Run(t *testing.T) {
-	r := &request.Request{}
-	h := request.HookList{}
+	r := &gohttp.Request{}
+	h := gohttp.HookList{}
 
 	val := ""
-	h.PushBack(func(r *request.Request) {
+	h.PushBack(func(r *gohttp.Request) {
 		val += "a"
 		r.Params = val
 	})
@@ -27,14 +27,14 @@ func TestHookList_Run(t *testing.T) {
 }
 
 func TestHooksList_Remove(t *testing.T) {
-	hooks := request.HookList{}
-	hook := request.Hook{Name: "Foo", Fn: func(r *request.Request) {}}
-	hook2 := request.Hook{Name: "Bar", Fn: func(r *request.Request) {}}
+	hooks := gohttp.HookList{}
+	hook := gohttp.Hook{Name: "Foo", Fn: func(r *gohttp.Request) {}}
+	hook2 := gohttp.Hook{Name: "Bar", Fn: func(r *gohttp.Request) {}}
 	// add 4 hooks
 	hooks.PushFrontHook(hook)
 	hooks.PushFrontHook(hook2)
 	hooks.PushFrontHook(hook)
-	hooks.PushFront(func(r *request.Request) {})
+	hooks.PushFront(func(r *gohttp.Request) {})
 
 	// assert for 4 hooks
 	if e, v := 4, hooks.Len(); e != v {
