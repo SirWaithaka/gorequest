@@ -10,8 +10,8 @@ import (
 	"github.com/rs/xid"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/SirWaithaka/gohttp"
-	"github.com/SirWaithaka/gohttp/corehooks"
+	"github.com/SirWaithaka/gorequest"
+	"github.com/SirWaithaka/gorequest/corehooks"
 )
 
 func TestAddScheme(t *testing.T) {
@@ -93,18 +93,17 @@ func TestSendHook(t *testing.T) {
 
 		for name, tc := range tcs {
 			t.Run(name, func(t *testing.T) {
-				cfg := gohttp.Config{Endpoint: server.URL, DisableSSL: true, HTTPClient: http.DefaultClient}
-				op := &gohttp.Operation{Name: "FooBar", Path: "/redirect"}
+				cfg := gorequest.Config{Endpoint: server.URL, DisableSSL: true, HTTPClient: http.DefaultClient}
+				op := gorequest.Operation{Name: "FooBar", Path: "/redirect"}
 
-				hooks := gohttp.Hooks{}
+				hooks := gorequest.Hooks{}
 				hooks.Send.PushBackHook(corehooks.SendHook)
 
 				cfg.DisableFollowRedirects = !tc.Redirect
 
-				req := gohttp.New(cfg, hooks, nil, op, nil, nil)
-				if err := req.Send(); err != nil {
-					t.Errorf("expected nil error, got %v", err)
-				}
+				req := gorequest.New(cfg, op, hooks, nil, nil, nil)
+				err := req.Send()
+				assert.Nil(t, err)
 
 				// check response status
 				assert.Equal(t, tc.ExpectedStatus, req.Response.StatusCode)
@@ -117,18 +116,15 @@ func TestSendHook(t *testing.T) {
 
 		t.Run("transport error", func(t *testing.T) {
 			client := &http.Client{Transport: &testSendHandlerTransport{}}
-			op := &gohttp.Operation{Name: "Operation"}
+			op := gorequest.Operation{Name: "Operation"}
 
-			hooks := gohttp.Hooks{}
+			hooks := gorequest.Hooks{}
 			hooks.Send.PushBackHook(corehooks.SendHook)
-			req := gohttp.New(gohttp.Config{HTTPClient: client}, hooks, nil, op, nil, nil)
+			req := gorequest.New(gorequest.Config{HTTPClient: client}, op, hooks, nil, nil, nil)
 
-			if err := req.Send(); err == nil {
-				t.Errorf("expected error, got nil")
-			}
-			if req.Response == nil {
-				t.Errorf("expected response, got nil")
-			}
+			err := req.Send()
+			assert.NotNil(t, err)
+			assert.NotNil(t, req.Response)
 		})
 
 		t.Run("url.Error timeout", func(t *testing.T) {
@@ -136,18 +132,15 @@ func TestSendHook(t *testing.T) {
 				Timeout:   100 * time.Millisecond,
 				Transport: &testSendHandlerTransport{timeout: 500 * time.Millisecond},
 			}
-			op := &gohttp.Operation{Name: "Operation"}
+			op := gorequest.Operation{Name: "Operation"}
 
-			hooks := gohttp.Hooks{}
+			hooks := gorequest.Hooks{}
 			hooks.Send.PushBackHook(corehooks.SendHook)
-			req := gohttp.New(gohttp.Config{HTTPClient: client}, hooks, nil, op, nil, nil)
+			req := gorequest.New(gorequest.Config{HTTPClient: client}, op, hooks, nil, nil, nil)
 
-			if err := req.Send(); err == nil {
-				t.Errorf("expected error, got nil")
-			}
-			if req.Response == nil {
-				t.Errorf("expected response, got nil")
-			}
+			err := req.Send()
+			assert.NotNil(t, err)
+			assert.NotNil(t, req.Response)
 			assert.Equal(t, 0, req.Response.StatusCode)
 		})
 	})
@@ -161,15 +154,13 @@ func TestSetRequestID(t *testing.T) {
 	}
 
 	// build request hooks
-	hooks := gohttp.Hooks{}
+	hooks := gorequest.Hooks{}
 	hooks.Build.PushFrontHook(corehooks.SetRequestID(generator))
-	hooks.Complete.PushFront(func(r *gohttp.Request) {
+	hooks.Complete.PushFront(func(r *gorequest.Request) {
 		assert.Equal(t, rid, r.Config.RequestID)
 	})
 
-	req := gohttp.New(gohttp.Config{}, hooks, nil, nil, nil, nil)
+	req := gorequest.New(gorequest.Config{}, gorequest.Operation{}, hooks, nil, nil, nil)
 	err := req.Send()
-	if err != nil {
-		t.Errorf("expected nil error, got %v", err)
-	}
+	assert.Nil(t, err)
 }

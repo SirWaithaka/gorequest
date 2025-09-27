@@ -15,37 +15,32 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/rs/xid"
 
-	"github.com/SirWaithaka/gohttp"
+	"github.com/SirWaithaka/gorequest"
 )
 
-var schemeRE = regexp.MustCompile("^([^:]+)://")
+var DefaultHooks = defaultHooks()
 
-func DefaultHooks() gohttp.Hooks {
-	var hooks gohttp.Hooks
+func defaultHooks() gorequest.Hooks {
+	var hooks gorequest.Hooks
 
-	hooks.Build.PushFrontHook(SetHTTPClient(nil))
+	hooks.Build.PushFrontHook(LogHTTPRequest)
 	hooks.Build.PushFrontHook(ResolveEndpoint)
 	hooks.Send.PushBackHook(SendHook)
-
-	// new instance of retry hook
-	retryHook := NewRetryer()
-	hooks.Retry.PushBackHook(retryHook.Retry())
-	hooks.Complete.PushBackHook(retryHook.Close())
 
 	return hooks
 }
 
 // SetBasicAuth modifies the http.Request headers and adds basic auth credentials
-func SetBasicAuth(username, password string) gohttp.Hook {
-	return gohttp.Hook{Name: "core.BasicAuth", Fn: func(r *gohttp.Request) {
+func SetBasicAuth(username, password string) gorequest.Hook {
+	return gorequest.Hook{Name: "core.BasicAuth", Fn: func(r *gorequest.Request) {
 		r.Request.SetBasicAuth(username, password)
 	}}
 }
 
 // SetHTTPClient sets the http.Client to be used for requests.
 // Sets a default http.Client if none is provided with a timeout of 30 seconds.
-func SetHTTPClient(client *http.Client) gohttp.Hook {
-	return gohttp.Hook{Name: "core.SetHTTPClient", Fn: func(r *gohttp.Request) {
+func SetHTTPClient(client *http.Client) gorequest.Hook {
+	return gorequest.Hook{Name: "core.SetHTTPClient", Fn: func(r *gorequest.Request) {
 		if client == nil {
 			client = &http.Client{Timeout: 30 * time.Second}
 		}
@@ -53,6 +48,8 @@ func SetHTTPClient(client *http.Client) gohttp.Hook {
 		r.Config.HTTPClient = client
 	}}
 }
+
+var schemeRE = regexp.MustCompile("^([^:]+)://")
 
 // AddScheme adds the HTTP or HTTPS schemes to an endpoint URL if there is no
 // scheme. If disableSSL is true, HTTP will set HTTP instead of the default HTTPS.
@@ -71,13 +68,13 @@ func AddScheme(endpoint string, disableSSL bool) string {
 	return endpoint
 }
 
-var ResolveEndpoint = gohttp.Hook{Name: "core.ResolveEndpoint", Fn: func(r *gohttp.Request) {
+var ResolveEndpoint = gorequest.Hook{Name: "core.ResolveEndpoint", Fn: func(r *gorequest.Request) {
 	r.Config.Endpoint = AddScheme(r.Config.Endpoint, r.Config.DisableSSL)
 }}
 
 // EncodeRequestBody converts the value in r.Params into an io reader and adds it
 // to the http.Request instance
-var EncodeRequestBody = gohttp.Hook{Name: "core.EncodeRequestBody", Fn: func(r *gohttp.Request) {
+var EncodeRequestBody = gorequest.Hook{Name: "core.EncodeRequestBody", Fn: func(r *gorequest.Request) {
 	if r.Params == nil {
 		return
 	}
@@ -95,13 +92,13 @@ var EncodeRequestBody = gohttp.Hook{Name: "core.EncodeRequestBody", Fn: func(r *
 
 var reStatusCode = regexp.MustCompile(`^(\d{3})`)
 
-var SendHook = gohttp.Hook{Name: "core.Send", Fn: func(r *gohttp.Request) {
+var SendHook = gorequest.Hook{Name: "core.Send", Fn: func(r *gorequest.Request) {
 	sender := sendFollowRedirects
 	if r.Config.DisableFollowRedirects {
 		sender = sendWithoutFollowRedirects
 	}
 
-	if r.Request.Body == gohttp.NoBody {
+	if r.Request.Body == gorequest.NoBody {
 		// Strip off the request body if the NoBody reader was used as a
 		// placeholder for a request body. This prevents the SDK from
 		// making requests with a request body when it would be invalid
@@ -124,11 +121,11 @@ var SendHook = gohttp.Hook{Name: "core.Send", Fn: func(r *gohttp.Request) {
 	}
 }}
 
-func sendFollowRedirects(r *gohttp.Request) (*http.Response, error) {
+func sendFollowRedirects(r *gorequest.Request) (*http.Response, error) {
 	return r.Config.HTTPClient.Do(r.Request)
 }
 
-func sendWithoutFollowRedirects(r *gohttp.Request) (*http.Response, error) {
+func sendWithoutFollowRedirects(r *gorequest.Request) (*http.Response, error) {
 	transport := r.Config.HTTPClient.Transport
 	if transport == nil {
 		transport = http.DefaultTransport
@@ -137,7 +134,7 @@ func sendWithoutFollowRedirects(r *gohttp.Request) (*http.Response, error) {
 	return transport.RoundTrip(r.Request)
 }
 
-func handleSendError(r *gohttp.Request, err error) {
+func handleSendError(r *gorequest.Request, err error) {
 	// Prevent leaking if an HTTPResponse was returned. Clean up
 	// the body.
 	if r.Response != nil {
@@ -145,7 +142,7 @@ func handleSendError(r *gohttp.Request, err error) {
 	}
 
 	// Capture the case where url.Error is returned for error processing
-	// response. e.g., 301 without location header comes back as string
+	// response. e.g., 301 without a location header comes back as a string
 	// error and r.HTTPResponse is nil. Other URL redirect errors will
 	// come back in a similar method.
 	if e, ok := err.(*url.Error); ok && e.Err != nil {
@@ -198,7 +195,7 @@ func (t *timer) Start(dur time.Duration) {
 	}
 }
 
-// Stop is used to free resources when timer is no longer used
+// Stop is used to free resources when the timer is no longer used
 func (t *timer) Stop() {
 	if t.timer != nil {
 		t.timer.Stop()
@@ -213,7 +210,7 @@ type RetryHook struct {
 	timer *timer
 }
 
-func (r RetryHook) nextDelay(cfg gohttp.RetryConfig) time.Duration {
+func (r RetryHook) nextDelay(cfg gorequest.RetryConfig) time.Duration {
 	// using the multiplier, calculate the next delay
 	next := float64(cfg.CurrentDelay) * cfg.Multiplier
 	// if the next calculated delay is greater than max delay, return max delay
@@ -223,8 +220,8 @@ func (r RetryHook) nextDelay(cfg gohttp.RetryConfig) time.Duration {
 	return time.Duration(next)
 }
 
-func (r *RetryHook) Retry() gohttp.Hook {
-	return gohttp.Hook{Name: "core.Retry", Fn: func(req *gohttp.Request) {
+func (r *RetryHook) Retry() gorequest.Hook {
+	return gorequest.Hook{Name: "core.Retry", Fn: func(req *gorequest.Request) {
 		// increment retry count
 		req.RetryConfig.RetryCount += 1
 
@@ -237,7 +234,7 @@ func (r *RetryHook) Retry() gohttp.Hook {
 
 		// start the timer and wait
 		r.timer.Start(req.Delay(req))
-		// wait for timer to complete or context Done signal
+		// wait for the timer to complete or context Done signal
 		select {
 		case <-r.timer.C():
 		case <-ctx.Done():
@@ -253,22 +250,23 @@ func (r *RetryHook) Retry() gohttp.Hook {
 }
 
 // Close stops the timer. Call close as a complete hook to ensure the timer is stopped.
-func (r *RetryHook) Close() gohttp.Hook {
-	return gohttp.Hook{Name: "core.RetryClose", Fn: func(_ *gohttp.Request) {
+func (r *RetryHook) Close() gorequest.Hook {
+	return gorequest.Hook{Name: "core.RetryClose", Fn: func(_ *gorequest.Request) {
 		r.timer.Stop()
 	}}
 }
 
-// LogHTTPRequest is a hook to log the HTTP request sent to a service. If log level
-// matches request.LogDebugWithHTTPBody, the request body will be included.
-var LogHTTPRequest = gohttp.Hook{Name: "core.LogHTTPRequest", Fn: logRequest}
+// LogHTTPRequest is a hook to log the HTTP request sent to a service.
+// If Request.Config.Logger is nil or the level is not debug, it ignores logging.
+// If the log level matches request.LogDebugWithHTTPBody, the request body will be included.
+var LogHTTPRequest = gorequest.Hook{Name: "core.LogHTTPRequest", Fn: logRequest}
 
-func logRequest(r *gohttp.Request) {
-	if !r.Config.LogLevel.AtLeast(gohttp.LogDebug) || r.Config.Logger == nil {
+func logRequest(r *gorequest.Request) {
+	if !r.Config.LogLevel.AtLeast(gorequest.LogDebug) || r.Config.Logger == nil {
 		return
 	}
 
-	logBody := r.Config.LogLevel.Equals(gohttp.LogDebugWithHTTPBody)
+	logBody := r.Config.LogLevel.Equals(gorequest.LogDebugWithHTTPBody)
 	b, err := httputil.DumpRequest(r.Request, logBody)
 	if err != nil {
 		r.Config.Logger.Log(fmt.Sprintf("DEBUG: %s failed, error %v",
@@ -283,8 +281,8 @@ func logRequest(r *gohttp.Request) {
 
 // SetRequestID will set a default request id to the request if no id generator
 // function is given
-func SetRequestID(fn ...func() string) gohttp.Hook {
-	return gohttp.Hook{Name: "core.SetRequestID", Fn: func(r *gohttp.Request) {
+func SetRequestID(fn ...func() string) gorequest.Hook {
+	return gorequest.Hook{Name: "core.SetRequestID", Fn: func(r *gorequest.Request) {
 		if len(fn) == 0 {
 			r.Config.RequestID = xid.New().String()
 			return
