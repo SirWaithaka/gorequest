@@ -1,4 +1,4 @@
-package gohttp
+package gorequest
 
 import (
 	"log"
@@ -34,7 +34,7 @@ const (
 	// LogDebugWithHTTPBody state used to log HTTP request and response HTTP bodies
 	// in addition to the headers and path. This should be used to see the body
 	// content of requests and responses made. Will also enable LogDebug.
-	LogDebugWithHTTPBody LogLevel = LogDebug | (1 << iota)
+	LogDebugWithHTTPBody = LogDebug | (1 << iota)
 
 	// LogDebugWithRequestRetries state used to log when service requests will
 	// be retried. This should be used to log when you want to log when service
@@ -54,12 +54,9 @@ func (f LoggerFunc) Log(args ...any) {
 	f(args...)
 }
 
-// NewDefaultLogger returns a Logger which will write log messages to stdout, and
-// use same formatting runes as the stdlib log.Logger
-func NewDefaultLogger() Logger {
-	return &defaultLogger{
-		logger: log.New(os.Stdout, "", log.LstdFlags|log.Llongfile),
-	}
+// DefaultLogger writes to stdout
+var DefaultLogger Logger = &defaultLogger{
+	logger: log.New(os.Stdout, "", log.LstdFlags|log.Llongfile),
 }
 
 // A defaultLogger provides a minimalistic logger satisfying the Logger interface.

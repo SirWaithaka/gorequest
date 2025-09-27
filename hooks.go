@@ -1,4 +1,4 @@
-package gohttp
+package gorequest
 
 import (
 	"strings"
@@ -34,7 +34,7 @@ func (l *HookList) copy() HookList {
 	return n
 }
 
-// Clear clears the hook list
+// Clear removes all hooks from the hook list
 func (l *HookList) Clear() {
 	l.list = l.list[0:0]
 }
@@ -83,7 +83,7 @@ func (l *HookList) Remove(name string) {
 			copy(l.list[i:], l.list[i+1:])
 			// zero last element
 			l.list[l.Len()-1] = Hook{}
-			// clear last element
+			// clear the last element
 			l.list = l.list[:l.Len()-1]
 
 			i--
@@ -111,16 +111,17 @@ func (l *HookList) Run(r *Request) {
 	}
 }
 
+// Debug returns a string of ordered hook names in the list
 func (l *HookList) Debug() string {
-	hooks := make([]string, l.Len())
+	names := make([]string, l.Len())
 	for _, h := range l.list {
 		name := h.Name
 		if name == "" {
 			name = "__anonymous"
 		}
-		hooks = append(hooks, name)
+		names = append(names, name)
 	}
-	return strings.Join(hooks, " ")
+	return strings.Join(names, " ")
 }
 
 // Copy returns a copy of these hooks' lists

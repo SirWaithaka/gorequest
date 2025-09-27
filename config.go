@@ -1,14 +1,14 @@
-package gohttp
+package gorequest
 
 import (
 	"net/http"
 )
 
 type Config struct {
-	// Endpoint is hostname or fully qualified URI of the service being called
+	// Endpoint is the hostname or fully qualified URI of the service being called
 	Endpoint string
 
-	// Name of the external service being called
+	// ServiceName of the external service being called
 	ServiceName string
 
 	// Set this to `true` to disable SSL when sending requests. Defaults

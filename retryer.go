@@ -1,4 +1,4 @@
-package gohttp
+package gorequest
 
 import (
 	"errors"

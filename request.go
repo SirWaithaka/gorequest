@@ -1,4 +1,4 @@
-package gohttp
+package gorequest
 
 import (
 	"bytes"
@@ -43,7 +43,7 @@ type (
 		Retryer
 		RetryConfig RetryConfig
 
-		Operation *Operation
+		Operation Operation
 		Request   *http.Request
 		Response  *http.Response
 
@@ -111,10 +111,12 @@ func (r *Request) ApplyOptions(opts ...Option) {
 
 // New returns a new Request pointer for the api operation and parameters.
 //
-// Params is any value for the request payload.
+// The params argument can represent a type for the request payload.
+// Set the data argument to the expected response payload structure.
 //
-// Data is for the response payload
-func New(cfg Config, hooks Hooks, retryer Retryer, operation *Operation, params, data any) *Request {
+// If no method is provided, the default method will be POST.
+// If no retryer is provided, a no-op retryer will be used.
+func New(cfg Config, operation Operation, hooks Hooks, retryer Retryer, params, data any) *Request {
 	// set a default http client if not provided
 	if cfg.HTTPClient == nil {
 		cfg.HTTPClient = http.DefaultClient
@@ -122,10 +124,6 @@ func New(cfg Config, hooks Hooks, retryer Retryer, operation *Operation, params,
 
 	if retryer == nil {
 		retryer = noOpRetryer{}
-	}
-
-	if operation == nil {
-		operation = &Operation{Method: http.MethodPost}
 	}
 
 	method := operation.Method
@@ -217,8 +215,8 @@ func (r *Request) Send() error {
 				Body:   io.NopCloser(&bytes.Buffer{}),
 			}
 		}
-		// Regardless of success or failure of the request, trigger the Complete
-		// request hooks.
+		// Regardless of the end status of the request success or failure, trigger
+		// the Complete request hooks.
 		r.Hooks.Complete.Run(r)
 	}()
 
@@ -261,12 +259,12 @@ func (r *Request) prepareRetry() error {
 			r.Operation.Name, r.RetryConfig.RetryCount))
 	}
 
-	// The previous http.Request will have a reference to the r.Body
+	// The previous http.Request will have a reference to Request.Body,
 	// and the HTTP Client's Transport may still be reading from
 	// the request's body even though the Client's Do returned.
 	r.Request = copyHTTPRequest(r.Request, nil)
 
-	// Closing response body to ensure that no response body is leaked
+	// Closing the response body to ensure that no response body is leaked
 	// between retry attempts.
 	if r.Response != nil && r.Response.Body != nil {
 		r.Response.Body.Close()
