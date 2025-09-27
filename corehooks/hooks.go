@@ -18,7 +18,9 @@ import (
 	"github.com/SirWaithaka/gorequest"
 )
 
-var DefaultHooks = defaultHooks()
+func Default() gorequest.Hooks {
+	return defaultHooks()
+}
 
 func defaultHooks() gorequest.Hooks {
 	var hooks gorequest.Hooks

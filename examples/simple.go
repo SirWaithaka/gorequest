@@ -19,7 +19,7 @@ func simpleGetRequest() {
 	url := "https://jsonplaceholder.typicode.com/posts/10"
 	response := &Post{}
 	// create an instance of request
-	request := gorequest.New(gorequest.Config{Endpoint: url}, gorequest.Operation{Method: http.MethodGet}, corehooks.DefaultHooks, nil, nil, response)
+	request := gorequest.New(gorequest.Config{Endpoint: url}, gorequest.Operation{Method: http.MethodGet}, corehooks.Default(), nil, nil, response)
 	// make request
 	if err := request.Send(); err != nil {
 		log.Println(err)

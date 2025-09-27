@@ -103,6 +103,64 @@ func TestRequest_New(t *testing.T) {
 			})
 		}
 	})
+
+	t.Run("test that it duplicates the hooks", func(t *testing.T) {
+		// create a hook list with 4 hooks
+		list := HookList{}
+		list.PushBackHook(Hook{Name: "Foo", Fn: func(r *Request) {}})
+		list.PushBackHook(Hook{Name: "Bar", Fn: func(r *Request) {}})
+		list.PushBackHook(Hook{Name: "Baz", Fn: func(r *Request) {}})
+		list.PushBackHook(Hook{Name: "Qux", Fn: func(r *Request) {}})
+		// set hooks
+		original := Hooks{}
+		original.Validate = list.copy()
+		original.Build = list.copy()
+		original.Send = list.copy()
+		original.Unmarshal = list.copy()
+		original.Complete = list.copy()
+
+		// make a test copy of the original hooks
+		hooks := original.Copy()
+
+		req := New(Config{}, Operation{}, hooks, nil, nil, nil)
+		// assert the request hooks have not changed
+		assert.Equal(t, hooks.Validate.Len(), req.Hooks.Validate.Len())
+		assert.Equal(t, hooks.Build.Len(), req.Hooks.Build.Len())
+		assert.Equal(t, hooks.Send.Len(), req.Hooks.Send.Len())
+		assert.Equal(t, hooks.Unmarshal.Len(), req.Hooks.Unmarshal.Len())
+		assert.Equal(t, hooks.Complete.Len(), req.Hooks.Complete.Len())
+
+		// remove an item from each hook list in the test copy
+		hooks.Validate.Remove("Foo")
+		hooks.Validate.Remove("Bar")
+		hooks.Build.Remove("Bar")
+		hooks.Send.Remove("Baz")
+		hooks.Unmarshal.Remove("Qux")
+		//hooks.Complete.Remove("Qux")
+
+		err := req.Send()
+		assert.NoError(t, err)
+
+		// assert the number of items in request hooks equals the original
+		assert.Equal(t, original.Validate.Len(), req.Hooks.Validate.Len())
+		assert.Equal(t, original.Build.Len(), req.Hooks.Build.Len())
+		assert.Equal(t, original.Send.Len(), req.Hooks.Send.Len())
+		assert.Equal(t, original.Unmarshal.Len(), req.Hooks.Unmarshal.Len())
+		assert.Equal(t, original.Complete.Len(), req.Hooks.Complete.Len())
+
+		// make a second request
+		req = New(Config{}, Operation{}, hooks, nil, nil, nil)
+
+		err = req.Send()
+		assert.NoError(t, err)
+		// assert the request hooks have not changed
+		assert.Equal(t, hooks.Validate.Len(), req.Hooks.Validate.Len())
+		assert.Equal(t, hooks.Build.Len(), req.Hooks.Build.Len())
+		assert.Equal(t, hooks.Send.Len(), req.Hooks.Send.Len())
+		assert.Equal(t, hooks.Unmarshal.Len(), req.Hooks.Unmarshal.Len())
+		assert.Equal(t, hooks.Complete.Len(), req.Hooks.Complete.Len())
+
+	})
 }
 
 func TestRequest_Send(t *testing.T) {
