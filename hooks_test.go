@@ -1,49 +1,44 @@
-package gohttp_test
+package gorequest_test
 
 import (
 	"testing"
 
-	"github.com/SirWaithaka/gohttp"
+	"github.com/stretchr/testify/assert"
+
+	"github.com/SirWaithaka/gorequest"
 )
 
 func TestHookList_Run(t *testing.T) {
-	r := &gohttp.Request{}
-	h := gohttp.HookList{}
+	r := &gorequest.Request{}
+	h := gorequest.HookList{}
 
 	val := ""
-	h.PushBack(func(r *gohttp.Request) {
+	h.PushBack(func(r *gorequest.Request) {
 		val += "a"
 		r.Params = val
 	})
 	h.Run(r)
 
 	// assert
-	if e, v := "a", val; e != v {
-		t.Errorf("expected %q, got %q", e, v)
-	}
-	if e, v := "a", r.Params.(string); e != v {
-		t.Errorf("expected %q, got %q", e, v)
-	}
+	assert.Equal(t, "a", val)
+	assert.Equal(t, "a", r.Params)
 }
 
 func TestHooksList_Remove(t *testing.T) {
-	hooks := gohttp.HookList{}
-	hook := gohttp.Hook{Name: "Foo", Fn: func(r *gohttp.Request) {}}
-	hook2 := gohttp.Hook{Name: "Bar", Fn: func(r *gohttp.Request) {}}
+	hooks := gorequest.HookList{}
+	hook := gorequest.Hook{Name: "Foo", Fn: func(r *gorequest.Request) {}}
+	hook2 := gorequest.Hook{Name: "Bar", Fn: func(r *gorequest.Request) {}}
 	// add 4 hooks
 	hooks.PushFrontHook(hook)
 	hooks.PushFrontHook(hook2)
 	hooks.PushFrontHook(hook)
-	hooks.PushFront(func(r *gohttp.Request) {})
+	hooks.PushFront(func(r *gorequest.Request) {})
 
 	// assert for 4 hooks
-	if e, v := 4, hooks.Len(); e != v {
-		t.Errorf("expected %d, got %d", e, v)
-	}
+	assert.Equal(t, 4, hooks.Len())
 
 	// remove hook
 	hooks.RemoveHook(hook)
-	if e, v := 2, hooks.Len(); e != v {
-		t.Errorf("expected %d, got %d", e, v)
-	}
+	assert.Equal(t, 2, hooks.Len())
+
 }

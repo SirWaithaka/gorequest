@@ -1,10 +1,12 @@
-package gohttp
+package gorequest
 
 import (
 	"errors"
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type FakeTemporaryError struct {
@@ -20,37 +22,35 @@ type MockHooks struct {
 	str string
 }
 
-func (hooks *MockHooks) validate(r *Request) {
+func (hooks *MockHooks) validate(*Request) {
 	hooks.str = hooks.str + "validate:"
 }
 
-func (hooks *MockHooks) build(r *Request) {
+func (hooks *MockHooks) build(*Request) {
 	hooks.str = hooks.str + "build:"
 }
 
-func (hooks *MockHooks) send(r *Request) {
+func (hooks *MockHooks) send(*Request) {
 	hooks.str = hooks.str + "send:"
 }
 
-func (hooks *MockHooks) unmarshal(r *Request) {
+func (hooks *MockHooks) unmarshal(*Request) {
 	hooks.str = hooks.str + "unmarshal:"
 }
 
-func (hooks *MockHooks) retry(r *Request) {
+func (hooks *MockHooks) retry(*Request) {
 	hooks.str = hooks.str + "retry:"
 }
 
-func (hooks *MockHooks) complete(r *Request) {
+func (hooks *MockHooks) complete(*Request) {
 	hooks.str = hooks.str + "complete:"
 }
 
 func TestRequest_New(t *testing.T) {
 
 	t.Run("test retryer is not nil", func(t *testing.T) {
-		req := New(Config{}, Hooks{}, nil, nil, nil, nil)
-		if req.Retryer == nil {
-			t.Errorf("expected non-nil retryer, got nil")
-		}
+		req := New(Config{}, Operation{}, Hooks{}, nil, nil, nil)
+		assert.NotNil(t, req.Retryer)
 	})
 
 	t.Run("test http request url", func(t *testing.T) {
@@ -94,12 +94,12 @@ func TestRequest_New(t *testing.T) {
 
 		for name, tc := range tcs {
 			t.Run(name, func(t *testing.T) {
-				op := &Operation{Name: "FooBar", Path: tc.Path}
-				req := New(Config{Endpoint: tc.Endpoint}, Hooks{}, nil, op, nil, nil)
+				op := Operation{Name: "FooBar", Path: tc.Path}
+				req := New(Config{Endpoint: tc.Endpoint}, op, Hooks{}, nil, nil, nil)
 				// assert results to expected values
-				assertEquals(t, tc.ExpectedPath, req.Request.URL.Path)
-				assertEquals(t, tc.ExpectedQuery, req.Request.URL.RawQuery)
-				assertEquals(t, http.MethodPost, req.Request.Method)
+				assert.Equal(t, tc.ExpectedPath, req.Request.URL.Path)
+				assert.Equal(t, tc.ExpectedQuery, req.Request.URL.RawQuery)
+				assert.Equal(t, http.MethodPost, req.Request.Method)
 			})
 		}
 	})
@@ -109,7 +109,7 @@ func TestRequest_Send(t *testing.T) {
 
 	t.Run("test that calling order of hooks is correct", func(t *testing.T) {
 
-		// test that retry hooks are not called if no error occurs at send hooks
+		// test that retry hooks are not called if no error occurs at Send hooks
 		t.Run("test order when no error occurs at send hooks", func(t *testing.T) {
 			mockHooks := MockHooks{}
 
@@ -122,20 +122,16 @@ func TestRequest_Send(t *testing.T) {
 				Complete:  HookList{list: []Hook{{Fn: mockHooks.complete}}},
 			}
 
-			req := New(Config{}, hooks.Copy(), nil, nil, nil, nil)
+			req := New(Config{}, Operation{}, hooks.Copy(), nil, nil, nil)
 
 			err := req.Send()
-			if err != nil {
-				t.Errorf("expected nil error, got %v", err)
-			}
+			assert.Nil(t, err)
 
 			expected := "validate:build:send:unmarshal:complete:"
-			if e, v := expected, mockHooks.str; e != v {
-				t.Errorf("expected %q, got %q", e, v)
-			}
+			assert.Equal(t, expected, mockHooks.str)
 		})
 
-		// test that retry hooks are called if error occurs at send hooks
+		// test that retry hooks are called if an error occurs at Send hooks
 		t.Run("test order when error occurs at send hooks", func(t *testing.T) {
 			mockHooks := MockHooks{}
 
@@ -148,23 +144,19 @@ func TestRequest_Send(t *testing.T) {
 				Complete:  HookList{list: []Hook{{Fn: mockHooks.complete}}},
 			}
 
-			// mock an error at send hooks
+			// mock an error at Send hooks
 			hooks.Send.PushBack(func(r *Request) {
 				// create a temporary error
 				tempErr := FakeTemporaryError{error: errors.New("fake error"), temporary: true}
 				r.Error = tempErr
 			})
-			req := New(Config{}, hooks, nil, nil, nil, nil)
+			req := New(Config{}, Operation{}, hooks, nil, nil, nil)
 
 			err := req.Send()
-			if err == nil {
-				t.Errorf("expected error, got nil")
-			}
+			assert.NotNil(t, err)
 
 			expected := "validate:build:send:complete:"
-			if e, v := expected, mockHooks.str; e != v {
-				t.Errorf("expected %q, got %q", e, v)
-			}
+			assert.Equal(t, expected, mockHooks.str)
 		})
 
 	})
@@ -191,16 +183,13 @@ func TestRequest_Send(t *testing.T) {
 
 		// create an instance of retryer
 		ret := retryer{}
-		req := New(Config{}, hooks, ret, nil, nil, nil)
+		req := New(Config{}, Operation{}, hooks, ret, nil, nil)
 		req.WithRetryConfig(cfg)
 
-		if err := req.Send(); err == nil {
-			t.Errorf("expected error, got nil")
-		}
+		err := req.Send()
+		assert.NotNil(t, err)
 
 		// confirm that request was retried
-		if e, v := cfg.MaxRetries, req.RetryConfig.RetryCount; e != v {
-			t.Errorf("expected %v, got %v", e, v)
-		}
+		assert.Equal(t, cfg.MaxRetries, req.RetryConfig.RetryCount)
 	})
 }
