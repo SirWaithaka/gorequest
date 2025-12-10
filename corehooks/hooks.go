@@ -27,7 +27,7 @@ func defaultHooks() gorequest.Hooks {
 
 	hooks.Build.PushFrontHook(LogHTTPRequest)
 	hooks.Build.PushFrontHook(ResolveEndpoint)
-	hooks.Send.PushBackHook(SendHook)
+	hooks.Send.PushFrontHook(SendHook)
 
 	return hooks
 }
@@ -179,6 +179,17 @@ func handleSendError(r *gorequest.Request, err error) {
 		r.Error = ctx.Err()
 	default:
 	}
+}
+
+// ResponseStatusCode returns and error if the response status code is not 2xx
+var ResponseStatusCode = gorequest.Hook{
+	Name: "core.ResponseStatusCode",
+	Fn: func(r *gorequest.Request) {
+		if r.Response.StatusCode < 200 || r.Response.StatusCode >= 300 {
+			r.Error = fmt.Errorf("%s %s status code %d",
+				r.Request.Method, r.Request.URL.Path, r.Response.StatusCode)
+		}
+	},
 }
 
 type timer struct {
