@@ -174,6 +174,10 @@ func debugLogReqError(r *Request, stage string, err error) {
 		return
 	}
 
+	if r.Config.Logger == nil {
+		return
+	}
+
 	r.Config.Logger.Log(fmt.Sprintf("DEBUG: %s %s failed, error %v",
 		stage, r.Operation.Name, err))
 }
